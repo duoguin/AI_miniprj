@@ -1,6 +1,6 @@
 # statistics.py
 # Module thong ke chi tieu ca nhan
-# Tuan 2 - Mini Project 
+# Tuan 2 - Mini Project .
 
 import pandas as pd
 from datetime import datetime, timedelta

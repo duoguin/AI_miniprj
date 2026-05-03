@@ -1,6 +1,6 @@
 # classifier.py
 # Module phan loai text chi tieu vao category
-# Tuan 2 - Mini Project 
+# Tuan 2 - Mini Project .
 
 import re
 import sys
