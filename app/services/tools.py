@@ -152,6 +152,87 @@ def getCategorySpending(month: str, category: str) -> str:
         return "WARNING: No data found."
 
 
+def getCategoryIncome(month: str, category: str) -> str:
+    """
+    BẮT BUỘC: Gọi tool này khi người dùng muốn biết tổng thu nhập (income) cho một danh mục (category) cụ thể.
+
+    Args:
+        month: Tháng cần xem (YYYY-MM)
+        category: Tên danh mục (category)
+    """
+
+    # Nếu không truyền tháng, mặc định lấy tháng hiện tại
+    if not month:
+        month = getCurrentMonth()
+
+    total = 0.0
+    details = []
+
+    try:
+        # Mở file CSV để đọc dữ liệu
+        with open(DATA_FILE, mode='r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+
+            # Lặp qua từng dòng dữ liệu trong CSV
+            for row in reader:
+                # Kiểm tra đúng tháng, đúng category và loại giao dịch phải là 'credit' (thu nhập)
+                if (
+                    row['Month'] == month and
+                    row['Category'].lower() == category.lower() and
+                    row['Transaction Type'] == 'credit'
+                ):
+                    amount = float(row['Amount'])
+                    total += amount
+                    # Lưu lại chi tiết từng khoản thu nhập
+                    details.append(f"{row['Description']} ({amount})")
+
+        # Trả về kết quả báo cáo dưới dạng chuỗi
+        return (
+            f"BÁO CÁO THU NHẬP {month} - {category}: "
+            f"Tổng cộng={total}, Chi tiết={', '.join(details) if details else 'Không có'}"
+        )
+
+    except FileNotFoundError:
+        return "CẢNH BÁO: Không tìm thấy dữ liệu."
+
+
+def listCategoriesByType(month: str) -> str:
+    """
+    BẮT BUỘC: Gọi tool này khi người dùng muốn xem danh sách các danh mục (category) đã được sử dụng, phân loại theo thu nhập (income) và chi tiêu (expense).
+    
+    Args:
+        month: Tháng cần xem (YYYY-MM)
+    """
+    # Nếu không truyền tháng, mặc định lấy tháng hiện tại
+    if not month:
+        month = getCurrentMonth()
+
+    # Khởi tạo tập hợp (set) để lưu danh mục nhằm tránh trùng lặp
+    income_categories = set()
+    expense_categories = set()
+
+    try:
+        with open(DATA_FILE, mode='r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                # Chỉ lấy các giao dịch trong tháng được yêu cầu
+                if row['Month'] == month:
+                    if row['Transaction Type'] == 'credit':
+                        income_categories.add(row['Category'])
+                    elif row['Transaction Type'] == 'debit':
+                        expense_categories.add(row['Category'])
+
+        # Trả về chuỗi kết quả gồm 2 danh sách
+        return (
+            f"DANH MỤC TRONG THÁNG {month}:\n"
+            f"Thu nhập (Income): {', '.join(income_categories) if income_categories else 'Không có'}\n"
+            f"Chi tiêu (Expense): {', '.join(expense_categories) if expense_categories else 'Không có'}"
+        )
+
+    except FileNotFoundError:
+        return "CẢNH BÁO: Không tìm thấy dữ liệu."
+
+
 def setCategoryBudget(category: str, amount: float, month: str) -> str:
     """
     REQUIRED: Call when user sets budget for a category.

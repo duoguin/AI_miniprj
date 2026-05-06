@@ -9,7 +9,9 @@ from services.tools import (
     logTransaction,
     getMonthlySummary,
     getCategorySpending,
-    getCurrentTime
+    getCurrentTime,
+    getCategoryIncome,
+    listCategoriesByType
 )
 
 load_dotenv()
@@ -21,6 +23,8 @@ TOOL_MAP = {
     "logTransaction": logTransaction,
     "getMonthlySummary": getMonthlySummary,
     "getCategorySpending": getCategorySpending,
+    "getCategoryIncome": getCategoryIncome,
+    "listCategoriesByType": listCategoriesByType,
     # "getCurrentTime": getCurrentTime,
 }
 
@@ -34,7 +38,7 @@ Current datetime: {datetime.now().isoformat()}
 Danh mục:
 [Ăn uống, Di chuyển, Hóa đơn, Mua sắm, Lương]
 """,
-        tools=[logTransaction, getMonthlySummary, getCategorySpending],
+        tools=[logTransaction, getMonthlySummary, getCategorySpending, getCategoryIncome, listCategoriesByType],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
     )
 )

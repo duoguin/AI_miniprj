@@ -70,6 +70,56 @@ class FinanceService:
             "count": int(result.count)
         }
 
+    @staticmethod
+    def get_category_income(db, category: str) -> Dict:
+        """Thu nhập theo category cụ thể"""
+        # Sử dụng tháng hiện tại làm mặc định
+        month = datetime.now().strftime("%Y-%m")
+        
+        # Truy vấn SQL: Tính tổng số tiền (earned) và số lượng giao dịch (count) cho thu nhập (credit)
+        query = """
+            SELECT COALESCE(SUM(Amount), 0) as earned, COUNT(*) as count
+            FROM transactions 
+            WHERE "Transaction Type" = 'credit' 
+              AND Month = :month 
+              AND Category = :category
+        """
+        # Thực thi truy vấn và lấy dòng dữ liệu kết quả đầu tiên
+        result = db.execute(text(query), {"month": month, "category": category}).fetchone()
+        
+        # Đóng gói kết quả trả về dạng Dictionary
+        return {
+            "category": category,
+            "earned": round(float(result.earned), 2),
+            "count": int(result.count)
+        }
+
+    @staticmethod
+    def list_categories_by_type(db, month: Optional[str] = None) -> Dict:
+        """Danh sách category phân loại theo income (thu) và outcome (chi)"""
+        # Nếu không chỉ định tháng, sẽ lấy tháng hiện tại
+        if month is None:
+            month = datetime.now().strftime("%Y-%m")
+            
+        # Truy vấn SQL: Lấy danh sách danh mục (Category) và loại giao dịch của chúng trong tháng
+        query = """
+            SELECT Category, "Transaction Type" as type
+            FROM transactions
+            WHERE Month = :month
+            GROUP BY Category, "Transaction Type"
+        """
+        results = db.execute(text(query), {"month": month}).fetchall()
+        
+        # Tách danh sách thành 2 mảng: một cho thu nhập (credit) và một cho chi tiêu (debit)
+        income_categories = [r.Category for r in results if r.type == 'credit']
+        outcome_categories = [r.Category for r in results if r.type == 'debit']
+        
+        return {
+            "month": month,
+            "income_categories": income_categories,
+            "outcome_categories": outcome_categories
+        }
+
     #Cảnh báo ngân sách
     @staticmethod
     def check_budget_warning(db) -> Dict[str, Any]:
