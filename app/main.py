@@ -1,45 +1,113 @@
+from services.tools import (
+    logTransaction,
+    getMonthlySummary,
+    getCategorySpending,
+    setCategoryBudget,
+    getBudgetStatus,
+    getCurrentTime
+)
 from google import genai
+from config import DATA_FILE
 from google.genai import types
-from services.tools import log_transaction, get_monthly_summary, get_category_spending
+from dotenv import load_dotenv
+from datetime import datetime
 import os
-api_key = os.getenv("API_KEY")  
+import sys
+
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stdin.reconfigure(encoding='utf-8')
+
+
+load_dotenv()
+api_key = os.getenv("API_KEY")
 client = genai.Client(api_key=api_key)
 
+
+TOOL_MAP = {
+    "logTransaction": logTransaction,
+    "getMonthlySummary": getMonthlySummary,
+    "getCategorySpending": getCategorySpending,
+    "setCategoryBudget": setCategoryBudget,
+    "getBudgetStatus": getBudgetStatus,
+    # "getCurrentTime": getCurrentTime,
+}
+
 chat = client.chats.create(
-    model='gemini-2.5-flash-lite',
+    model='gemini-2.0-flash-001',
     config=types.GenerateContentConfig(
-        system_instruction="""Bạn là trợ lý tài chính. 
-        Nhiệm vụ của bạn là ghi chép chi tiêu giúp người dùng.
-        Khi người dùng khai báo chi tiêu, bạn phải tự động suy luận xem món đồ đó thuộc danh mục nào trong 5 nhóm sau: [Ăn uống, Di chuyển, Hóa đơn, Mua sắm, Lương].
-        Ví dụ: Người dùng nói 'mua áo thun' -> phân loại vào 'Mua sắm'.
-        Không bao giờ hỏi lại người dùng về danh mục nếu bạn có thể tự đoán được.""",
-        tools=[log_transaction, get_monthly_summary, get_category_spending],
-        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+        system_instruction="""
+Bạn là trợ lý tài chính.
+Current datetime: {datetime.now().isoformat()}
+
+Danh mục:
+[Ăn uống, Di chuyển, Hóa đơn, Mua sắm, Lương]
+""",
+        tools=[logTransaction, getMonthlySummary,
+               getCategorySpending, setCategoryBudget, getBudgetStatus],
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+            disable=True)
     )
 )
 
-def get_chatbot_response(user_input):
-    try:
-        response = chat.send_message(user_input)
-        if response.function_calls:
-            for call in response.function_calls:
-                print(f"[⚙️ HỆ THỐNG] Moni đang thực thi hàm '{call.name}' với dữ liệu: {call.args}")
-        try:
-            if response.text:
-                print(f"Moni: {response.text}")
-        except ValueError:
-            # Nếu bot chỉ trả về function_call mà không kèm chữ, ta bỏ qua lỗi này
-            pass
-        return response.text
-    except Exception as e:
-        return f"Loi ket noi hoac API: {e}"
 
-print("--- Chatbot Gemini da san sang! (Go 'exit' de thoat) ---")
+def run_chat(user_input):
+    now = datetime.now().isoformat()
+    full_input = f"""
+        Current date: {now}
+        User: {user_input}
+    """
+    response = chat.send_message(full_input)
+
+    while True:
+        if not response.function_calls:
+            return response.text
+
+        for call in response.function_calls:
+            tool_name = call.name
+            args = call.args
+
+            print(f"[⚙️ TOOL] {tool_name} called with {args}")
+
+            if tool_name not in TOOL_MAP:
+                result = f"ERROR: Tool {tool_name} not found"
+            else:
+                try:
+                    result = TOOL_MAP[tool_name](**args)
+                except Exception as e:
+                    result = f"ERROR: {e}"
+
+            print(f"[📦 RESULT] {result}")
+            print("TOOL CALL:", call.args)
+
+            response = chat.send_message(
+                types.Part.from_function_response(
+                    name=tool_name,
+                    response={"result": result}
+                )
+            )
+
+
+print("=== Moni Chatbot Ready ===", datetime.now().isoformat())
+
 while True:
-    user_message = input("Ban: ")
-    if user_message.lower() in ['exit', 'quit', 'thoat']:
-        print("Tam biet!")
+    user_input = input("Bạn: ")
+
+    if user_input.lower() in ["exit", "quit"]:
         break
-        
-    ai_response = get_chatbot_response(user_message)
-    print(f"Gemini: {ai_response}\n")
+
+    reply = run_chat(user_input)
+    print("Moni:", reply)
+
+
+#     QUY TẮC BẮT BUỘC:
+
+# - KHÔNG BAO GIỜ hỏi người dùng về ngày giờ
+# - LUÔN LUÔN sử dụng tool getCurrentTime để lấy thời gian hiện tại
+# - Nếu user nói "hôm nay", "hôm qua", phải tự suy ra, KHÔNG hỏi lại
+
+# FLOW:
+# 1. Nếu thiếu date → gọi getCurrentTime
+# 2. Convert sang YYYY-MM-DD
+# 3. Gọi logTransaction
+
+# VI PHẠM QUY TẮC = SAI
