@@ -1,88 +1,192 @@
 import csv
-from datetime import datetime
 from config import DATA_FILE
+from utils.time_utils import getCurrentDate, getCurrentMonth, normalizeDate, extractMonthFromDate
 
-def log_transaction(
-    date: str, 
-    description: str, 
-    amount: float, 
-    transaction_type: str, 
-    category: str, 
-    account_name: str
+def logTransaction(
+    date: str,
+    description: str,
+    amount: float,
+    transactionType: str,
+    category: str,
+    accountName: str
 ) -> str:
     """
     REQUIRED: Call this tool when the user wants to log, save, or record a new expense or income.
-    
+
+    STRICT RULES:
+    - amount MUST be positive
+    - transactionType MUST be 'debit' or 'credit'
+    - date MUST be YYYY-MM-DD
+
     Args:
-        date: The transaction date in 'YYYY-MM-DD' format (e.g., '2026-05-03'). 
-              If the user says 'today', use the current date.
-        description: A brief label of the transaction (e.g., 'Phở bò', 'Lương tháng 4').
-        amount: The numerical value of the transaction. ALWAYS POSITIVE.
-        transaction_type: Must be exactly 'debit' (for expenses) or 'credit' (for income).
-        category: The category (e.g., 'Ăn uống', 'Di chuyển', 'Mua sắm', 'Lương').
-        account_name: The payment method used (e.g., 'Tiền mặt', 'MoMo', 'TPBank'). Default to 'Tiền mặt' if not specified.
+        date: Transaction date
+        description: Description
+        amount: Positive number
+        transactionType: debit | credit
+        category: Category name
+        accountName: Payment method
     """
-    try:
-        month = date[:7] 
-    except:
-        month = datetime.now().strftime('%Y-%m')
+
+    if transactionType not in ["debit", "credit"]:
+        return "ERROR: transactionType must be 'debit' or 'credit'."
+
+    if amount <= 0:
+        return "ERROR: amount must be positive."
+
+    if not accountName:
+        accountName = "null"
+
+    date = normalizeDate(date)
+
+    if len(date) != 10:
+        return "ERROR: Invalid date format. Must be YYYY-MM-DD."
+
+    month = extractMonthFromDate(date)
 
     try:
         with open(DATA_FILE, mode='a', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            writer.writerow([date, description, amount, transaction_type, category, account_name, month])
-        
-        return f"System Log: Successfully recorded {amount} for {description} ({category}) via {account_name}."
-    except Exception as e:
-        return f"System Error: Could not save transaction. Details: {e}"
 
-def get_monthly_summary(month: str) -> str:
+            if file.tell() == 0:
+                writer.writerow([
+                    "Date",
+                    "Description",
+                    "Amount",
+                    "Transaction Type",
+                    "Category",
+                    "Account Name",
+                    "Month"
+                ])
+
+            writer.writerow([
+                date,
+                description,
+                amount,
+                transactionType,
+                category,
+                accountName,
+                month
+            ])
+
+        return f"SUCCESS: Recorded {amount} for {description} ({category}) via {accountName} on {date}."
+
+    except Exception as e:
+        return f"ERROR: Could not save transaction. {e}"
+
+
+def getMonthlySummary(month: str) -> str:
     """
-    REQUIRED: Call this tool when the user asks for their total spending, total income, or balance for a specific month.
-    
+    REQUIRED: Call this tool when user asks for total income, expense, or balance.
+
     Args:
-        month: The month to query in 'YYYY-MM' format (e.g., '2026-05').
+        month: YYYY-MM
     """
-    total_expense = 0.0
-    total_income = 0.0
-    
+
+    if not month:
+        month = getCurrentMonth()
+
+    totalExpense = 0.0
+    totalIncome = 0.0
+
     try:
         with open(DATA_FILE, mode='r', encoding='utf-8') as file:
             reader = csv.DictReader(file)
+
             for row in reader:
                 if row['Month'] == month:
-                    if row['Transaction Type'] == 'debit':
-                        total_expense += float(row['Amount'])
-                    elif row['Transaction Type'] == 'credit':
-                        total_income += float(row['Amount'])
-                        
-        balance = total_income - total_expense
-        return f"Database Report for {month}: Total Income = {total_income}, Total Expense = {total_expense}, Net Balance = {balance}."
-    
-    except FileNotFoundError:
-        return "System Warning: No data found. The database is empty."
+                    amount = float(row['Amount'])
 
-def get_category_spending(month: str, category: str) -> str:
+                    if row['Transaction Type'] == 'debit':
+                        totalExpense += amount
+                    elif row['Transaction Type'] == 'credit':
+                        totalIncome += amount
+
+        balance = totalIncome - totalExpense
+
+        return (
+            f"REPORT {month}: "
+            f"Income={totalIncome}, "
+            f"Expense={totalExpense}, "
+            f"Balance={balance}"
+        )
+
+    except FileNotFoundError:
+        return "WARNING: No data found."
+
+
+def getCategorySpending(month: str, category: str) -> str:
     """
-    REQUIRED: Call this tool when the user asks how much they spent on a specific category (e.g., Food, Transport) in a given month.
-    
+    REQUIRED: Call when user asks spending for a category.
+
     Args:
-        month: The month to query in 'YYYY-MM' format (e.g., '2026-05').
-        category: The category name to search for (e.g., 'Ăn uống', 'Di chuyển').
+        month: YYYY-MM
+        category: category name
     """
+
+    if not month:
+        month = getCurrentMonth()
+
     total = 0.0
-    transactions_list = []
-    
+    details = []
+
     try:
         with open(DATA_FILE, mode='r', encoding='utf-8') as file:
             reader = csv.DictReader(file)
+
             for row in reader:
-                if row['Month'] == month and row['Category'].lower() == category.lower() and row['Transaction Type'] == 'debit':
-                    total += float(row['Amount'])
-                    transactions_list.append(f"{row['Description']} ({row['Amount']})")
-        
-        details = ", ".join(transactions_list) if transactions_list else "None"
-        return f"Database Report for {month} - Category '{category}': Total Spent = {total}. Details: {details}."
-        
+                if (
+                    row['Month'] == month and
+                    row['Category'].lower() == category.lower() and
+                    row['Transaction Type'] == 'debit'
+                ):
+                    amount = float(row['Amount'])
+                    total += amount
+                    details.append(f"{row['Description']} ({amount})")
+
+        return (
+            f"CATEGORY REPORT {month} - {category}: "
+            f"Total={total}, Details={', '.join(details) if details else 'None'}"
+        )
+
     except FileNotFoundError:
-        return "System Warning: No data found."
+        return "WARNING: No data found."
+
+
+def setCategoryBudget(category: str, amount: float, month: str) -> str:
+    """
+    REQUIRED: Call when user sets budget for a category.
+
+    Args:
+        category: category name
+        amount: budget
+        month: YYYY-MM
+    """
+
+    if not month:
+        month = getCurrentMonth()
+
+    try:
+        with open("budgets.csv", mode='a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+
+            if file.tell() == 0:
+                writer.writerow(["Category", "Amount", "Month"])
+
+            writer.writerow([category, amount, month])
+
+        return f"SUCCESS: Budget set {amount} for {category} in {month}"
+
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def getCurrentTime() -> str:
+    """
+    REQUIRED: Call this tool when current datetime is needed.
+
+    Returns:
+        ISO datetime string
+    """
+    from time_utils import getCurrentDateTime
+    return getCurrentDateTime()
+
