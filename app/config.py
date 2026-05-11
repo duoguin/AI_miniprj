@@ -1,7 +1,8 @@
 import os
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_FILE = os.path.join(BASE_DIR, 'db', 'transactions.csv')
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE   = os.path.join(APP_DIR, 'db', 'personal_transactions.csv')
+BUDGET_FILE = os.path.join(APP_DIR, 'db', 'budgets.csv')
 
 # Tạo file CSV với các cột chuẩn nếu file chưa tồn tại
 # def init_db():
